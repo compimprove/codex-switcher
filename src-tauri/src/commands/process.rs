@@ -342,6 +342,7 @@ fn find_codex_processes() -> anyhow::Result<(Vec<u32>, usize)> {
     {
         let mut pids = Vec::new();
         let mut bg_count = 0;
+        let process_names = read_unix_process_names();
 
         // Include TTY so we can distinguish interactive CLI sessions from
         // background helper processes such as lingering app-server instances.
@@ -369,6 +370,10 @@ fn find_codex_processes() -> anyhow::Result<(Vec<u32>, usize)> {
                     continue;
                 }
 
+                let Ok(pid) = pid_str.parse::<u32>() else {
+                    continue;
+                };
+
                 let lowercase_command = command.to_ascii_lowercase();
                 let is_switcher = lowercase_command.contains("codex-switcher");
 
@@ -382,17 +387,14 @@ fn find_codex_processes() -> anyhow::Result<(Vec<u32>, usize)> {
                 // instead of relying on the first token.
                 let first_token = command.split_whitespace().next().unwrap_or("");
                 let is_codex_cli = first_token == "codex" || first_token.ends_with("/codex");
-                let is_codex_desktop = command.contains(".app/Contents/MacOS/Codex")
-                    && !command.contains("Codex Helper")
-                    && !command.contains("CodexBar");
+                let is_codex_desktop = is_macos_codex_desktop_process(
+                    &command,
+                    process_names.get(&pid).map(String::as_str),
+                );
 
                 if !is_codex_cli && !is_codex_desktop {
                     continue;
                 }
-
-                let Ok(pid) = pid_str.parse::<u32>() else {
-                    continue;
-                };
 
                 if pid == std::process::id() || pids.contains(&pid) {
                     continue;
@@ -429,6 +431,36 @@ fn find_codex_processes() -> anyhow::Result<(Vec<u32>, usize)> {
 
     #[allow(unreachable_code)]
     Ok((Vec::new(), 0))
+}
+
+#[cfg(unix)]
+fn read_unix_process_names() -> HashMap<u32, String> {
+    let Ok(output) = Command::new("ps").args(["-axo", "pid=,ucomm="]).output() else {
+        return HashMap::new();
+    };
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.trim().splitn(2, char::is_whitespace);
+            let pid = parts.next()?.parse::<u32>().ok()?;
+            let name = parts.next()?.trim();
+            (!name.is_empty()).then(|| (pid, name.to_string()))
+        })
+        .collect()
+}
+
+#[cfg(unix)]
+fn is_macos_codex_desktop_process(command: &str, process_name: Option<&str>) -> bool {
+    const EXECUTABLE_SUFFIX: &str = "/Codex.app/Contents/MacOS/Codex";
+
+    process_name == Some("Codex")
+        && command.find(EXECUTABLE_SUFFIX).is_some_and(|index| {
+            command[index + EXECUTABLE_SUFFIX.len()..]
+                .chars()
+                .next()
+                .is_none_or(char::is_whitespace)
+        })
 }
 
 #[cfg(windows)]
@@ -559,6 +591,41 @@ fn is_ide_plugin_process(command: &str) -> bool {
     command.contains(".antigravity")
         || command.contains("openai.chatgpt")
         || command.contains(".vscode")
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(unix)]
+    use super::is_macos_codex_desktop_process;
+
+    #[cfg(unix)]
+    #[test]
+    fn detects_only_the_macos_codex_desktop_root_process() {
+        assert!(is_macos_codex_desktop_process(
+            "/Applications/Codex.app/Contents/MacOS/Codex",
+            Some("Codex")
+        ));
+        assert!(is_macos_codex_desktop_process(
+            "/Users/test/Applications With Spaces/Codex.app/Contents/MacOS/Codex --flag",
+            Some("Codex")
+        ));
+        assert!(!is_macos_codex_desktop_process(
+            "/Applications/Codex.app/Contents/Frameworks/Codex Framework.framework/Helpers/Codex (Service).app/Contents/MacOS/Codex (Service) --type=gpu-process",
+            Some("Codex (Service)")
+        ));
+        assert!(!is_macos_codex_desktop_process(
+            "/Applications/Codex.app/Contents/Frameworks/Codex Framework.framework/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer",
+            Some("Codex (Renderer)")
+        ));
+        assert!(!is_macos_codex_desktop_process(
+            "/Applications/Codex.app/Contents/Resources/codex app-server",
+            Some("codex")
+        ));
+        assert!(!is_macos_codex_desktop_process(
+            "/Applications/Codex.app/Contents/Frameworks/Codex Framework.framework/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --app-executable /Applications/Codex.app/Contents/MacOS/Codex --type=renderer",
+            Some("Codex (Renderer)")
+        ));
+    }
 }
 
 #[cfg(windows)]
