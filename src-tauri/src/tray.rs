@@ -319,14 +319,6 @@ fn refresh_tray_display<R: Runtime>(
                 eprintln!("Failed to refresh tray title: {error}");
             }
         }
-        TrayDisplayMode::Hidden => {
-            if let Err(error) = tray.set_title(None::<&str>) {
-                eprintln!("Failed to clear tray title: {error}");
-            }
-            if let Err(error) = tray.set_visible(false) {
-                eprintln!("Failed to hide tray icon: {error}");
-            }
-        }
     }
 }
 
@@ -346,7 +338,6 @@ fn active_tray_title(active_account_id: Option<&str>, mode: TrayDisplayMode) -> 
     match mode {
         TrayDisplayMode::IconAndSession => active_session_title(active_account_id),
         TrayDisplayMode::ActiveUsageText => Some(active_usage_title(active_account_id)),
-        TrayDisplayMode::Hidden => None,
     }
 }
 
@@ -558,10 +549,10 @@ mod tests {
     }
 
     #[test]
-    fn hidden_tray_mode_has_no_title() {
+    fn active_usage_mode_has_a_title() {
         assert_eq!(
-            active_tray_title(Some("active"), TrayDisplayMode::Hidden),
-            None
+            active_tray_title(Some("active"), TrayDisplayMode::ActiveUsageText),
+            Some("H:-- W:--".to_string())
         );
     }
 }

@@ -12,7 +12,6 @@ use crate::{
 
 const TRAY_ICON_AND_SESSION_ID: &str = "tray-display-icon-and-session";
 const TRAY_ACTIVE_USAGE_TEXT_ID: &str = "tray-display-active-usage-text";
-const TRAY_HIDDEN_ID: &str = "tray-display-hidden";
 
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     refresh(app)?;
@@ -31,7 +30,6 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     let mode = match event.id().as_ref() {
         TRAY_ICON_AND_SESSION_ID => TrayDisplayMode::IconAndSession,
         TRAY_ACTIVE_USAGE_TEXT_ID => TrayDisplayMode::ActiveUsageText,
-        TRAY_HIDDEN_ID => TrayDisplayMode::Hidden,
         _ => return,
     };
 
@@ -89,14 +87,6 @@ fn build_menu<R: Runtime>(
                 "Hourly + Weekly",
                 true,
                 tray_display_mode == TrayDisplayMode::ActiveUsageText,
-                None::<&str>,
-            )?,
-            &CheckMenuItem::with_id(
-                app,
-                TRAY_HIDDEN_ID,
-                "Hidden",
-                true,
-                tray_display_mode == TrayDisplayMode::Hidden,
                 None::<&str>,
             )?,
         ],

@@ -24,8 +24,8 @@ pub struct AccountsStore {
 pub enum TrayDisplayMode {
     IconAndSession,
     #[default]
+    #[serde(alias = "hidden")]
     ActiveUsageText,
-    Hidden,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

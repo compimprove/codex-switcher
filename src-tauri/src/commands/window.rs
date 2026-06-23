@@ -36,6 +36,8 @@ pub fn restore_main_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(tray) = app.get_webview_window(TRAY_WINDOW) {
         let _ = tray.hide();
     }
+    #[cfg(target_os = "macos")]
+    let _ = app.show();
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
